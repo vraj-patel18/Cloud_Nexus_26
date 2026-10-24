@@ -1,27 +1,32 @@
-def calculate_risk(
-    is_anomaly,
-    failed_logins,
-    high_message_rate,
-    correlated_events
-):
+
+from detection.rules import detect_with_rules
+from detection.detector import detect_with_ml
+
+
+def analyze_event(event):
+    # Run both detectors
+    rule_result = detect_with_rules(event)
+    ml_result = detect_with_ml(event)
+
+    reasons = list(rule_result["reasons"])
+
+    if ml_result["is_anomaly"]:
+        reasons.append("ML detected unusual behaviour")
+
+    # Calculate an illustrative risk score
     score = 0
-    reasons = []
 
-    if is_anomaly:
+    if ml_result["is_anomaly"]:
         score += 25
-        reasons.append("Unusual device behaviour")
 
-    if failed_logins >= 5:
+    if event["message_rate"] > 80:
+        score += 25
+
+    if event["failed_logins"] >= 5:
         score += 30
-        reasons.append("Repeated login failures")
 
-    if high_message_rate:
-        score += 25
-        reasons.append("Abnormally high message rate")
-
-    if correlated_events >= 2:
+    if event["destination_count"] >= 8:
         score += 20
-        reasons.append("Related events detected")
 
     score = min(score, 100)
 
@@ -33,7 +38,40 @@ def calculate_risk(
         priority = "LOW"
 
     return {
+        "device_id": event["device_id"],
+        "is_anomaly": ml_result["is_anomaly"],
+        "rule_triggered": rule_result["is_suspicious"],
+        "anomaly_score": ml_result["anomaly_score"],
         "risk_score": score,
         "priority": priority,
-        "reasons": reasons
+        "reasons": reasons,
+        "status": (
+            "Needs investigation"
+            if reasons
+            else "No alert"
+        )
     }
+
+
+if __name__ == "__main__":
+    normal_event = {
+        "device_id": "device_001",
+        "message_rate": 20,
+        "failed_logins": 0,
+        "payload_size": 512,
+        "destination_count": 2
+    }
+
+    suspicious_event = {
+        "device_id": "device_002",
+        "message_rate": 200,
+        "failed_logins": 10,
+        "payload_size": 512,
+        "destination_count": 15
+    }
+
+    print("NORMAL EVENT RESULT:")
+    print(analyze_event(normal_event))
+
+    print("\nSUSPICIOUS EVENT RESULT:")
+    print(analyze_event(suspicious_event))
