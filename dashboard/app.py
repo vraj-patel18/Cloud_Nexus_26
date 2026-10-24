@@ -1,64 +1,70 @@
 
-import json
 from pathlib import Path
+import json
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-
-# Resolve paths relative to the project, not the terminal directory.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TELEMETRY_FILE = PROJECT_ROOT / "data" / "telemetry.csv"
 ALERTS_FILE = PROJECT_ROOT / "data" / "alerts.json"
 
 st.set_page_config(
-    page_title="TrustLens AI | IoT Security",
+    page_title="TrustLens AI",
     page_icon="🛡️",
     layout="wide",
 )
 
 st.title("🛡️ TrustLens AI")
-st.caption(
-    "IoT Threat Detection & Risk Monitoring | "
-    "Simulated prototype data"
-)
-
-if st.button("🔄 Refresh data"):
-    st.rerun()
+st.caption("IoT Threat Detection & Risk Monitoring | Simulated prototype data")
 
 
 @st.cache_data
 def load_data(telemetry_mtime, alerts_mtime):
     telemetry = pd.read_csv(TELEMETRY_FILE)
 
-    with open(ALERTS_FILE, "r", encoding="utf-8") as file:
+    with ALERTS_FILE.open("r", encoding="utf-8") as file:
         alert_data = json.load(file)
 
-    alerts = pd.DataFrame(alert_data.get("alerts", []))
+    # Support both a list of alerts and a dictionary containing alerts.
+    if isinstance(alert_data, list):
+        alert_records = alert_data
+        summary_data = {}
+    elif isinstance(alert_data, dict):
+        alert_records = alert_data.get("alerts", [])
+        summary_data = alert_data
+    else:
+        alert_records = []
+        summary_data = {}
+
+    if not isinstance(alert_records, list):
+        alert_records = []
+
+    alerts = pd.DataFrame(alert_records)
 
     if not alerts.empty:
-        alerts["priority"] = (
-            alerts["priority"].fillna("UNKNOWN").str.upper()
-        )
-        alerts["risk_score"] = pd.to_numeric(
-            alerts["risk_score"], errors="coerce"
-        )
-        alerts["timestamp"] = pd.to_datetime(
-            alerts["timestamp"], errors="coerce"
-        )
-        alerts["reasons_text"] = alerts["reasons"].apply(
-            lambda value: ", ".join(map(str, value))
-            if isinstance(value, list)
-            else str(value or "")
-        )
+        if "risk_score" in alerts.columns:
+            alerts["risk_score"] = pd.to_numeric(
+                alerts["risk_score"], errors="coerce"
+            )
+
+        if "timestamp" in alerts.columns:
+            alerts["timestamp"] = pd.to_datetime(
+                alerts["timestamp"], errors="coerce", utc=True
+            )
 
     if "timestamp" in telemetry.columns:
         telemetry["timestamp"] = pd.to_datetime(
-            telemetry["timestamp"], errors="coerce"
+            telemetry["timestamp"], errors="coerce", utc=True
         )
 
-    return telemetry, alerts, alert_data
+    return telemetry, alerts, summary_data
+
+
+if st.button("🔄 Refresh data"):
+    st.cache_data.clear()
+    st.rerun()
 
 
 try:
@@ -68,109 +74,58 @@ try:
     )
 except FileNotFoundError as error:
     st.error(f"Required data file not found: {error.filename}")
-    st.info(
-        "Generate telemetry and run the detection pipeline first."
-    )
+    st.info("Generate telemetry and run the detection pipeline first.")
     st.stop()
-except (json.JSONDecodeError, pd.errors.ParserError) as error:
-    st.error(f"Could not read the project data: {error}")
+except (json.JSONDecodeError, pd.errors.ParserError, OSError, ValueError) as error:
+    st.error(f"Could not load dashboard data: {error}")
     st.stop()
-
 
 if telemetry.empty:
     st.warning("No telemetry events are available.")
     st.stop()
 
-# Main metrics
-total_events = int(
-    alert_data.get("total_events", len(telemetry))
-)
-total_alerts = int(
-    alert_data.get("alerts_generated", len(alerts))
-)
-high_alerts = (
-    int((alerts["priority"] == "HIGH").sum())
-    if not alerts.empty else 0
-)
-medium_alerts = (
-    int((alerts["priority"] == "MEDIUM").sum())
-    if not alerts.empty else 0
-)
-low_alerts = (
-    int((alerts["priority"] == "LOW").sum())
-    if not alerts.empty else 0
-)
+# Ensure expected columns exist before building charts and tables.
+required_columns = [
+    "device_id",
+    "message_rate",
+    "failed_logins",
+    "payload_size",
+    "destination_count",
+]
+missing_columns = [
+    column for column in required_columns if column not in telemetry.columns
+]
+if missing_columns:
+    st.error(f"Telemetry CSV is missing columns: {', '.join(missing_columns)}")
+    st.stop()
+
+total_events = len(telemetry)
 unique_devices = telemetry["device_id"].nunique()
+total_alerts = len(alerts)
 
-st.subheader("Security Overview")
-
-c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Events Processed", f"{total_events:,}")
-c2.metric("Alerts Generated", f"{total_alerts:,}")
-c3.metric("High Priority", high_alerts)
-c4.metric("Medium Priority", medium_alerts)
-c5.metric("Devices Observed", unique_devices)
-
-st.caption(
-    f"Priority breakdown: {high_alerts} high · "
-    f"{medium_alerts} medium · {low_alerts} low"
-)
-
-if len(telemetry) != total_events:
-    st.warning(
-        "The event count in alerts.json differs from telemetry.csv. "
-        "Run the pipeline again if these files are meant to match."
+if not alerts.empty and "priority" in alerts.columns:
+    high_alerts = int(
+        alerts["priority"].astype(str).str.upper().eq("HIGH").sum()
     )
+else:
+    high_alerts = 0
+
+if not alerts.empty and "risk_score" in alerts.columns:
+    average_risk = alerts["risk_score"].mean()
+else:
+    average_risk = 0
+
+# Summary metrics
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Telemetry Events", f"{total_events:,}")
+col2.metric("Devices Monitored", f"{unique_devices:,}")
+col3.metric("Security Alerts", f"{total_alerts:,}")
+col4.metric("High-Priority Alerts", f"{high_alerts:,}")
 
 st.divider()
 
-# Charts
-left, right = st.columns(2)
-
-with left:
-    st.subheader("Alert Priority Distribution")
-
-    if alerts.empty:
-        st.info("No alerts in the current output.")
-    else:
-        priority_counts = (
-            alerts["priority"]
-            .value_counts()
-            .rename_axis("Priority")
-            .reset_index(name="Alerts")
-        )
-        fig = px.bar(
-            priority_counts,
-            x="Priority",
-            y="Alerts",
-            color="Priority",
-            title="Generated alerts by priority",
-        )
-        st.plotly_chart(fig, width="stretch")
-
-with right:
-    st.subheader("Telemetry Scenario Labels")
-
-    if "scenario_label" in telemetry.columns:
-        scenario_counts = (
-            telemetry["scenario_label"]
-            .fillna("Unknown")
-            .value_counts()
-            .rename_axis("Scenario")
-            .reset_index(name="Events")
-        )
-        fig = px.pie(
-            scenario_counts,
-            names="Scenario",
-            values="Events",
-            title="Events by simulator label",
-        )
-        st.plotly_chart(fig, width="stretch")
-    else:
-        st.info("No scenario_label column found.")
-
 # Telemetry activity
-st.subheader("Message Activity Over Time")
+st.subheader("📈 Telemetry Activity")
 
 if {"timestamp", "message_rate"}.issubset(telemetry.columns):
     activity = telemetry.dropna(
@@ -182,53 +137,52 @@ if {"timestamp", "message_rate"}.issubset(telemetry.columns):
             activity,
             x="timestamp",
             y="message_rate",
+            color="device_id",
             title="Message rate across telemetry events",
             labels={
                 "timestamp": "Time",
                 "message_rate": "Messages per interval",
+                "device_id": "Device",
             },
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No valid timestamps available for the activity chart.")
+else:
+    st.info("Timestamp or message-rate data is unavailable.")
+
+# Scenario distribution
+if "scenario_label" in telemetry.columns:
+    st.subheader("🧪 Telemetry Scenario Distribution")
+    scenario_counts = (
+        telemetry["scenario_label"]
+        .fillna("unknown")
+        .astype(str)
+        .value_counts()
+        .rename_axis("Scenario")
+        .reset_index(name="Events")
+    )
+
+    fig = px.bar(
+        scenario_counts,
+        x="Scenario",
+        y="Events",
+        title="Events by scenario label",
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 st.divider()
 
-# Alert explorer
-st.subheader("🚨 Alert Explorer")
+# Alerts table
+st.subheader("🚨 Security Alerts")
 
 if alerts.empty:
-    st.success("No alerts are currently present in alerts.json.")
+    st.info("No security alerts have been saved yet.")
 else:
-    priorities = ["ALL"] + [
-        priority
-        for priority in ["HIGH", "MEDIUM", "LOW", "UNKNOWN"]
-        if priority in alerts["priority"].unique()
-    ]
-
-    f1, f2 = st.columns([1, 2])
-    with f1:
-        selected_priority = st.selectbox(
-            "Filter by priority", priorities
+    if "timestamp" in alerts.columns:
+        alerts = alerts.sort_values(
+            "timestamp", ascending=False, na_position="last"
         )
-    with f2:
-        device_search = st.text_input(
-            "Search device ID", placeholder="e.g. device_002"
-        )
-
-    filtered = alerts.copy()
-
-    if selected_priority != "ALL":
-        filtered = filtered[
-            filtered["priority"] == selected_priority
-        ]
-
-    if device_search.strip():
-        filtered = filtered[
-            filtered["device_id"].astype(str).str.contains(
-                device_search.strip(), case=False, na=False
-            )
-        ]
 
     display_columns = [
         column
@@ -239,24 +193,23 @@ else:
             "risk_score",
             "is_anomaly",
             "rule_triggered",
-            "reasons_text",
             "status",
+            "reasons",
         ]
-        if column in filtered.columns
+        if column in alerts.columns
     ]
 
-    st.caption(f"Showing {len(filtered):,} of {len(alerts):,} alerts")
-
-    st.dataframe(
-        filtered[display_columns].sort_values(
-            "timestamp", ascending=False, na_position="last"
-        ),
-        width="stretch",
-        hide_index=True,
-    )
+    if display_columns:
+        st.dataframe(
+            alerts[display_columns],
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.dataframe(alerts, use_container_width=True, hide_index=True)
 
 # Device summary
-st.subheader("📡 Device Risk Summary")
+st.subheader("💻 Device Summary")
 
 device_summary = (
     telemetry.groupby("device_id")
@@ -269,43 +222,29 @@ device_summary = (
     .reset_index()
 )
 
-if not alerts.empty:
-    device_alerts = (
+if not alerts.empty and "device_id" in alerts.columns:
+    alert_summary = (
         alerts.groupby("device_id")
-        .agg(
-            Alert_Count=("device_id", "size"),
-            Max_Risk_Score=("risk_score", "max"),
-        )
+        .agg(Alert_Count=("device_id", "size"))
         .reset_index()
     )
-
     device_summary = device_summary.merge(
-        device_alerts, on="device_id", how="left"
+        alert_summary, on="device_id", how="left"
+    )
+    device_summary["Alert_Count"] = (
+        device_summary["Alert_Count"].fillna(0).astype(int)
     )
 else:
     device_summary["Alert_Count"] = 0
-    device_summary["Max_Risk_Score"] = pd.NA
-
-device_summary["Alert_Count"] = (
-    device_summary["Alert_Count"].fillna(0).astype(int)
-)
-device_summary["Max_Risk_Score"] = (
-    device_summary["Max_Risk_Score"].fillna(0)
-)
-
-device_summary = device_summary.sort_values(
-    ["Max_Risk_Score", "Alert_Count"],
-    ascending=False,
-)
 
 st.dataframe(
-    device_summary.round(2),
-    width="stretch",
+    device_summary,
+    use_container_width=True,
     hide_index=True,
 )
 
 st.caption(
-    "Prototype note: results are based on the current telemetry, "
-    "configured rules, and ML detector. They are not a guarantee "
-    "of real-world threat detection."
+    "Prototype note: results are based on simulated telemetry and "
+    "the alerts saved by the detection pipeline."
 )
+

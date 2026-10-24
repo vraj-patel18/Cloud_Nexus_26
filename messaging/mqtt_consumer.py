@@ -1,22 +1,56 @@
 
+import csv
 import json
 import os
+from pathlib import Path
 
 import paho.mqtt.client as mqtt
 
 from detection.risk_engine import analyze_event
+from messaging.alert_storage import save_alert
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+TELEMETRY_FILE = PROJECT_ROOT / "data" / "telemetry.csv"
 
 BROKER = os.getenv("MQTT_BROKER", "localhost")
 PORT = int(os.getenv("MQTT_PORT", "1883"))
 TOPIC = os.getenv("MQTT_TOPIC", "trustlens/telemetry")
+
+TELEMETRY_FIELDS = [
+    "device_id",
+    "timestamp",
+    "message_rate",
+    "failed_logins",
+    "payload_size",
+    "destination_count",
+    "scenario_label",
+]
 
 REQUIRED_FIELDS = {
     "device_id",
     "message_rate",
     "failed_logins",
     "payload_size",
-    "destination_count"
+    "destination_count",
 }
+
+
+def append_telemetry(event):
+    TELEMETRY_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    row = {field: event.get(field, "") for field in TELEMETRY_FIELDS}
+
+    # Preserve the CSV's existing columns and historical rows.
+    needs_header = (
+        not TELEMETRY_FILE.exists()
+        or TELEMETRY_FILE.stat().st_size == 0
+    )
+
+    with TELEMETRY_FILE.open("a", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=TELEMETRY_FIELDS)
+        if needs_header:
+            writer.writeheader()
+        writer.writerow(row)
 
 
 def on_connect(client, userdata, flags, reason_code, properties):
@@ -36,46 +70,50 @@ def on_message(client, userdata, message):
             return
 
         missing = REQUIRED_FIELDS - event.keys()
-
         if missing:
             print("Skipped message; missing fields:", sorted(missing))
             return
 
-        # Validate the fields consumed by the detector.
-        numeric_fields = [
+        for field in (
             "message_rate",
             "failed_logins",
             "payload_size",
-            "destination_count"
-        ]
-
-        for field in numeric_fields:
+            "destination_count",
+        ):
             value = event[field]
-
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or value < 0
+            ):
                 print("Skipped message; invalid numeric field:", field)
                 return
 
-            if value < 0:
-                print("Skipped message; negative field:", field)
-                return
+        # Normalize the event to the dashboard's CSV format.
+        event.setdefault("timestamp", "")
+        event.setdefault("scenario_label", "normal")
 
+        append_telemetry(event)
         result = analyze_event(event)
 
-        if result["reasons"]:
+        if result.get("reasons"):
             result["timestamp"] = event.get("timestamp")
+            result.setdefault("device_id", event["device_id"])
+
             print("\nPOTENTIAL SECURITY ALERT")
             print(json.dumps(result, indent=2))
+
+            save_alert(result)
         else:
             print("Normal event:", event["device_id"])
 
-    except (ValueError, TypeError, KeyError) as error:
-        print("Invalid telemetry message:", error)
+    except (ValueError, TypeError, KeyError, OSError) as error:
+        print("Could not process telemetry message:", error)
 
 
 client = mqtt.Client(
     mqtt.CallbackAPIVersion.VERSION2,
-    client_id="trustlens-security-engine"
+    client_id="trustlens-security-engine",
 )
 
 client.on_connect = on_connect
