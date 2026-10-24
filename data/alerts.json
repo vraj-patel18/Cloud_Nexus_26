@@ -2251,5 +2251,181 @@
     ],
     "status": "Needs investigation",
     "timestamp": "2026-10-24T20:34:11.900723+00:00"
+  },
+  {
+    "device_id": "device_001",
+    "is_anomaly": true,
+    "rule_triggered": false,
+    "anomaly_score": -0.0187,
+    "risk_score": 25,
+    "priority": "LOW",
+    "reasons": [
+      "ML detected unusual behaviour"
+    ],
+    "status": "Needs investigation",
+    "timestamp": 1792874946.2901192
+  },
+  {
+    "device_id": "device_002",
+    "is_anomaly": true,
+    "rule_triggered": false,
+    "anomaly_score": -0.0285,
+    "risk_score": 25,
+    "priority": "LOW",
+    "reasons": [
+      "ML detected unusual behaviour"
+    ],
+    "status": "Needs investigation",
+    "timestamp": 1792874948.2912674
+  },
+  {
+    "device_id": "device_005",
+    "is_anomaly": true,
+    "rule_triggered": true,
+    "anomaly_score": -0.0639,
+    "risk_score": 55,
+    "priority": "MEDIUM",
+    "reasons": [
+      "Repeated login failures",
+      "ML detected unusual behaviour"
+    ],
+    "status": "Needs investigation",
+    "timestamp": 1792874954.2974913
+  },
+  {
+    "device_id": "device_006",
+    "is_anomaly": true,
+    "rule_triggered": true,
+    "anomaly_score": -0.0639,
+    "risk_score": 45,
+    "priority": "MEDIUM",
+    "reasons": [
+      "Unusually many destinations",
+      "ML detected unusual behaviour"
+    ],
+    "status": "Needs investigation",
+    "timestamp": 1792874956.2983642
+  },
+  {
+    "device_id": "device_008",
+    "is_anomaly": true,
+    "rule_triggered": false,
+    "anomaly_score": -0.0542,
+    "risk_score": 25,
+    "priority": "LOW",
+    "reasons": [
+      "ML detected unusual behaviour"
+    ],
+    "status": "Needs investigation",
+    "timestamp": 1792874960.3004854
+  },
+  {
+    "device_id": "device_009",
+    "is_anomaly": true,
+    "rule_triggered": false,
+    "anomaly_score": -0.0149,
+    "risk_score": 25,
+    "priority": "LOW",
+    "reasons": [
+      "ML detected unusual behaviour"
+    ],
+    "status": "Needs investigation",
+    "timestamp": 1792874962.3020394
+  },
+  {
+    "device_id": "device_010",
+    "is_anomaly": true,
+    "rule_triggered": true,
+    "anomaly_score": -0.0211,
+    "risk_score": 55,
+    "priority": "MEDIUM",
+    "reasons": [
+      "Repeated login failures",
+      "ML detected unusual behaviour"
+    ],
+    "status": "Needs investigation",
+    "timestamp": 1792874964.303301
+  },
+  {
+    "device_id": "device_001",
+    "is_anomaly": true,
+    "rule_triggered": true,
+    "anomaly_score": -0.013,
+    "risk_score": 55,
+    "priority": "MEDIUM",
+    "reasons": [
+      "Repeated login failures",
+      "ML detected unusual behaviour"
+    ],
+    "status": "Needs investigation",
+    "timestamp": 1792874966.3044112
+  },
+  {
+    "device_id": "device_002",
+    "is_anomaly": true,
+    "rule_triggered": true,
+    "anomaly_score": -0.0639,
+    "risk_score": 55,
+    "priority": "MEDIUM",
+    "reasons": [
+      "Repeated login failures",
+      "ML detected unusual behaviour"
+    ],
+    "status": "Needs investigation",
+    "timestamp": 1792874968.3057504
+  },
+  {
+    "device_id": "device_003",
+    "is_anomaly": true,
+    "rule_triggered": true,
+    "anomaly_score": -0.0072,
+    "risk_score": 50,
+    "priority": "MEDIUM",
+    "reasons": [
+      "Message rate exceeds threshold",
+      "ML detected unusual behaviour"
+    ],
+    "status": "Needs investigation",
+    "timestamp": 1792874970.306865
+  },
+  {
+    "device_id": "device_004",
+    "is_anomaly": true,
+    "rule_triggered": false,
+    "anomaly_score": -0.0153,
+    "risk_score": 25,
+    "priority": "LOW",
+    "reasons": [
+      "ML detected unusual behaviour"
+    ],
+    "status": "Needs investigation",
+    "timestamp": 1792874972.3079844
+  },
+  {
+    "device_id": "device_005",
+    "is_anomaly": true,
+    "rule_triggered": false,
+    "anomaly_score": -0.0639,
+    "risk_score": 25,
+    "priority": "LOW",
+    "reasons": [
+      "ML detected unusual behaviour"
+    ],
+    "status": "Needs investigation",
+    "timestamp": 1792874974.3095677
+  },
+  {
+    "device_id": "device_007",
+    "is_anomaly": true,
+    "rule_triggered": true,
+    "anomaly_score": -0.0617,
+    "risk_score": 55,
+    "priority": "MEDIUM",
+    "reasons": [
+      "Repeated login failures",
+      "ML detected unusual behaviour"
+    ],
+    "status": "Needs investigation",
+    "timestamp": 1792874978.312142
   }
 ]
