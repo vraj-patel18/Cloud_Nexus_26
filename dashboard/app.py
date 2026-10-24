@@ -248,3 +248,10 @@ st.caption(
     "the alerts saved by the detection pipeline."
 )
 
+# Automatically refresh the dashboard every 5 seconds
+from streamlit_autorefresh import st_autorefresh
+
+st_autorefresh(
+    interval=5000,  # 5000 milliseconds = 5 seconds
+    key="trustlens_auto_refresh"
+)
