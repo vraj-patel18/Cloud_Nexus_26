@@ -6,6 +6,10 @@ import plotly.express as px
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
+import random
+import time
+import uuid
+
 
 # --------------------------------------------------
 # CONFIGURATION
@@ -131,6 +135,98 @@ def read_live_alerts():
 
 
 # --------------------------------------------------
+# CLOUD DEMO SIMULATOR
+# --------------------------------------------------
+
+def cloud_simulation_enabled():
+    """Enable this mode through Streamlit Cloud Secrets."""
+    try:
+        value = st.secrets.get("TRUSTLENS_CLOUD_SIMULATION", "false")
+        return str(value).strip().lower() in {"1", "true", "yes"}
+    except Exception:
+        return False
+
+
+def generate_cloud_demo_event():
+    """Append one synthetic IoT event during each dashboard rerun."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    scenario = random.choices(
+        ["normal", "message_flood", "login_failures", "unusual_destinations"],
+        weights=[75, 10, 8, 7],
+        k=1,
+    )[0]
+
+    if scenario == "message_flood":
+        message_rate = random.randint(100, 180)
+        failed_logins = random.randint(0, 2)
+        destination_count = random.randint(1, 5)
+    elif scenario == "login_failures":
+        message_rate = random.randint(5, 40)
+        failed_logins = random.randint(5, 10)
+        destination_count = random.randint(1, 5)
+    elif scenario == "unusual_destinations":
+        message_rate = random.randint(5, 40)
+        failed_logins = random.randint(0, 2)
+        destination_count = random.randint(8, 15)
+    else:
+        message_rate = random.randint(5, 40)
+        failed_logins = random.randint(0, 2)
+        destination_count = random.randint(1, 5)
+
+    event = {
+        "event_id": str(uuid.uuid4()),
+        "device_id": f"device_{random.randint(1, 10):03d}",
+        "timestamp": time.time(),
+        "message_rate": message_rate,
+        "failed_logins": failed_logins,
+        "destination_count": destination_count,
+        "payload_size": random.randint(64, 1500),
+        "scenario_label": scenario,
+        "source": "cloud_simulator",
+    }
+
+    # Preserve the existing telemetry CSV schema.
+    file_exists = TELEMETRY_FILE.exists() and TELEMETRY_FILE.stat().st_size > 0
+
+    if file_exists:
+        columns = pd.read_csv(TELEMETRY_FILE, nrows=0).columns.tolist()
+    else:
+        columns = list(event.keys())
+
+    row = {column: event.get(column) for column in columns}
+
+    pd.DataFrame([row], columns=columns).to_csv(
+        TELEMETRY_FILE,
+        mode="a",
+        header=not file_exists,
+        index=False,
+    )
+
+    # Generate a synthetic alert for suspicious scenarios.
+    if scenario != "normal":
+        risk_scores = {
+            "message_flood": 90,
+            "login_failures": 80,
+            "unusual_destinations": 75,
+        }
+
+        alert = {
+            **event,
+            "risk_score": risk_scores[scenario],
+            "priority": "HIGH" if scenario == "message_flood" else "MEDIUM",
+            "is_anomaly": True,
+            "rule_triggered": scenario,
+            "status": "Open",
+            "reasons": [f"Simulated suspicious behaviour: {scenario}"],
+        }
+
+        with LIVE_ALERTS_FILE.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(alert) + "\n")
+
+
+
+# --------------------------------------------------
 # DATA LOADING
 # --------------------------------------------------
 
@@ -188,6 +284,12 @@ def load_data(telemetry_version, alerts_version, live_alerts_version):
             )
 
     return telemetry, alerts, summary_data
+
+if cloud_simulation_enabled():
+    try:
+        generate_cloud_demo_event()
+    except (OSError, ValueError, pd.errors.ParserError) as error:
+        st.warning(f"Cloud simulation could not write an event: {error}")
 
 
 # --------------------------------------------------
